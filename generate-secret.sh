@@ -21,20 +21,21 @@ if [ -z "$API_KEY" ]; then
   exit 1
 fi
 
-# Create JSON object
-JSON_OBJECT=$(jq -n \
+# Create compact JSON object (no newlines, no pretty printing)
+JSON_OBJECT=$(jq -c -n \
   --arg port "$PORT" \
   --arg node_env "$NODE_ENV" \
   --arg api_key "$API_KEY" \
   '{PORT: $port, NODE_ENV: $node_env, API_KEY: $api_key}')
 
 echo ""
-echo "=== JSON Object ==="
-echo "$JSON_OBJECT" | jq '.'
+echo "=== JSON Object (compact) ==="
+echo "$JSON_OBJECT"
 
 echo ""
 echo "=== Base64 Encoded (for GitHub Secret) ==="
-ENCODED=$(echo -n "$JSON_OBJECT" | base64)
+# Ensure no trailing newlines when encoding
+ENCODED=$(echo -n "$JSON_OBJECT" | base64 | tr -d '\n\r')
 echo "$ENCODED"
 
 echo ""

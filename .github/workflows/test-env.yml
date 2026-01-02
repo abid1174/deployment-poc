@@ -47,17 +47,33 @@ jobs:
           
           echo "✅ Secret found! Length: $(echo -n "$SECRET_VALUE" | wc -c) characters"
           
-          # Decode the base64 encoded JSON
+          # Trim whitespace from the base64 string
+          SECRET_VALUE=$(echo -n "$SECRET_VALUE" | tr -d '[:space:]')
+          
+          # Decode the base64 encoded JSON (using -i to ignore garbage/whitespace)
           set +e
-          ENV_VARS_JSON=$(echo "$SECRET_VALUE" | base64 -d 2>&1)
+          ENV_VARS_JSON=$(echo -n "$SECRET_VALUE" | base64 -di 2>&1)
           DECODE_EXIT=$?
           set -e
           
           if [ $DECODE_EXIT -ne 0 ]; then
             echo "ERROR: Failed to decode base64"
-            echo "$ENV_VARS_JSON"
-            exit 1
+            echo "Attempting alternative decoding method..."
+            # Try without -i flag
+            ENV_VARS_JSON=$(echo -n "$SECRET_VALUE" | base64 -d 2>&1)
+            if [ $? -ne 0 ]; then
+              echo "Base64 decode error: $ENV_VARS_JSON"
+              echo ""
+              echo "Troubleshooting:"
+              echo "1. Ensure the secret value is valid base64"
+              echo "2. Remove any whitespace or newlines from the base64 string"
+              echo "3. Re-encode using: echo -n '{\"PORT\":\"3000\",...}' | base64"
+              exit 1
+            fi
           fi
+          
+          # Clean up the JSON (remove any trailing newlines/whitespace)
+          ENV_VARS_JSON=$(echo -n "$ENV_VARS_JSON" | tr -d '\n\r')
           
           # Display decoded JSON structure (for debugging)
           echo "=== Decoded JSON Structure ==="
