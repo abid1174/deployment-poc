@@ -1,0 +1,66 @@
+name: Test Environment Variables
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master, develop]
+
+jobs:
+  test-env:
+    runs-on: ubuntu-latest
+    environment: 
+      name: ${{ github.ref == 'refs/heads/main' && 'production' || 'development' }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Decode base64 environment variables
+        run: |
+          # Decode the base64 encoded JSON and extract all environment variables
+          ENV_VARS_JSON=$(echo "${{ secrets.DEPLOYMENT_POC_ENV_VARS }}" | base64 -d)
+          
+          # Extract each variable from JSON and set as environment variable
+          echo "PORT=$(echo "$ENV_VARS_JSON" | jq -r '.PORT // empty')" >> $GITHUB_ENV
+          echo "NODE_ENV=$(echo "$ENV_VARS_JSON" | jq -r '.NODE_ENV // empty')" >> $GITHUB_ENV
+          echo "API_KEY=$(echo "$ENV_VARS_JSON" | jq -r '.API_KEY // empty')" >> $GITHUB_ENV
+          
+          # Display decoded JSON structure (for debugging)
+          echo "=== Decoded JSON Structure ==="
+          echo "$ENV_VARS_JSON" | jq '.'
+          echo "=============================="
+
+      - name: Display decoded values (masked for security)
+        run: |
+          echo "=== Decoded Environment Variables ==="
+          echo "PORT: $PORT"
+          echo "NODE_ENV: $NODE_ENV"
+          echo "API_KEY: ${API_KEY:0:4}... (masked)"
+          echo "================================"
+          
+          # Verify they are decoded correctly
+          if [ -z "$PORT" ]; then
+            echo "ERROR: PORT is empty"
+            exit 1
+          fi
+          
+          if [ -z "$NODE_ENV" ]; then
+            echo "ERROR: NODE_ENV is empty"
+            exit 1
+          fi
+          
+          if [ -z "$API_KEY" ]; then
+            echo "ERROR: API_KEY is empty"
+            exit 1
+          fi
+          
+          echo "✅ All environment variables decoded successfully!"
+
+      - name: Test with Express app
+        run: |
+          npm ci
+          timeout 3 node server.js &
+          sleep 2
+          curl -f http://localhost:$PORT/health || exit 1
+          echo "✅ Server started successfully with decoded env vars!"
+

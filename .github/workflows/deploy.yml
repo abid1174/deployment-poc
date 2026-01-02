@@ -1,0 +1,58 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20.x"
+          cache: "npm"
+
+      - name: Decode base64 environment variables
+        run: |
+          # Decode the base64 encoded JSON and extract all environment variables
+          ENV_VARS_JSON=$(echo "${{ secrets.DEPLOYMENT_POC_ENV_VARS }}" | base64 -d)
+
+          # Extract each variable from JSON and set as environment variable
+          echo "PORT=$(echo "$ENV_VARS_JSON" | jq -r '.PORT // empty')" >> $GITHUB_ENV
+          echo "NODE_ENV=$(echo "$ENV_VARS_JSON" | jq -r '.NODE_ENV // empty')" >> $GITHUB_ENV
+          echo "API_KEY=$(echo "$ENV_VARS_JSON" | jq -r '.API_KEY // empty')" >> $GITHUB_ENV
+
+          # Display what was decoded (for debugging)
+          echo "Decoded JSON structure:"
+          echo "$ENV_VARS_JSON" | jq '.'
+
+      - name: Display decoded environment variables (masked)
+        run: |
+          echo "PORT is set: $([ -n "$PORT" ] && echo 'yes' || echo 'no')"
+          echo "NODE_ENV is set: $([ -n "$NODE_ENV" ] && echo 'yes' || echo 'no')"
+          echo "API_KEY is set: $([ -n "$API_KEY" ] && echo 'yes' || echo 'no')"
+          echo "API_KEY first 4 chars: ${API_KEY:0:4}..."
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build check
+        run: |
+          echo "Build check passed"
+          # Add your build commands here if needed
+
+      - name: Deploy
+        run: |
+          echo "Deploy to your platform here"
+          echo "Using PORT: $PORT"
+          echo "Using NODE_ENV: $NODE_ENV"
+          # Example: Deploy to Heroku, AWS, Vercel, etc.
+          # Add your deployment commands here

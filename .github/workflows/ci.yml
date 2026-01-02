@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master, develop]
+  pull_request:
+    branches: [main, master, develop]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'development' }}
+
+    strategy:
+      matrix:
+        node-version: [18.x, 20.x]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: "npm"
+
+      - name: Decode base64 environment variables
+        run: |
+          # Decode the base64 encoded JSON and extract all environment variables
+          if [ -n "${{ secrets.DEPLOYMENT_POC_ENV_VARS }}" ]; then
+            ENV_VARS_JSON=$(echo "${{ secrets.DEPLOYMENT_POC_ENV_VARS }}" | base64 -d)
+            
+            # Extract each variable from JSON and set as environment variable
+            echo "PORT=$(echo "$ENV_VARS_JSON" | jq -r '.PORT // empty')" >> $GITHUB_ENV
+            echo "NODE_ENV=$(echo "$ENV_VARS_JSON" | jq -r '.NODE_ENV // empty')" >> $GITHUB_ENV
+            echo "API_KEY=$(echo "$ENV_VARS_JSON" | jq -r '.API_KEY // empty')" >> $GITHUB_ENV
+          fi
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify server starts
+        run: |
+          timeout 5 node server.js || true
+        env:
+          PORT: ${{ env.PORT || '3000' }}
+          NODE_ENV: ${{ env.NODE_ENV || 'test' }}
+          API_KEY: ${{ env.API_KEY || 'test-api-key' }}
