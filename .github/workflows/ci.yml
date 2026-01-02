@@ -27,15 +27,41 @@ jobs:
 
       - name: Decode base64 environment variables
         run: |
-          # Decode the base64 encoded JSON and extract all environment variables
-          if [ -n "${{ secrets.DEPLOYMENT_POC_ENV_VARS }}" ]; then
-            ENV_VARS_JSON=$(echo "${{ secrets.DEPLOYMENT_POC_ENV_VARS }}" | base64 -d)
-            
-            # Extract each variable from JSON and set as environment variable
-            echo "PORT=$(echo "$ENV_VARS_JSON" | jq -r '.PORT // empty')" >> $GITHUB_ENV
-            echo "NODE_ENV=$(echo "$ENV_VARS_JSON" | jq -r '.NODE_ENV // empty')" >> $GITHUB_ENV
-            echo "API_KEY=$(echo "$ENV_VARS_JSON" | jq -r '.API_KEY // empty')" >> $GITHUB_ENV
+          # Check if secret exists
+          if [ -z "${{ secrets.DEPLOYMENT_POC_ENV_VARS }}" ]; then
+            echo "WARNING: DEPLOYMENT_POC_ENV_VARS secret is not set, using defaults"
+            echo "PORT=3000" >> $GITHUB_ENV
+            echo "NODE_ENV=test" >> $GITHUB_ENV
+            echo "API_KEY=test-api-key" >> $GITHUB_ENV
+            exit 0
           fi
+
+          # Decode the base64 encoded JSON
+          set +e
+          ENV_VARS_JSON=$(echo "${{ secrets.DEPLOYMENT_POC_ENV_VARS }}" | base64 -d 2>&1)
+          DECODE_EXIT=$?
+          set -e
+
+          if [ $DECODE_EXIT -ne 0 ]; then
+            echo "ERROR: Failed to decode base64"
+            echo "$ENV_VARS_JSON"
+            exit 1
+          fi
+
+          # Validate JSON
+          if ! echo "$ENV_VARS_JSON" | jq empty 2>/dev/null; then
+            echo "ERROR: Decoded value is not valid JSON"
+            exit 1
+          fi
+
+          # Extract each variable from JSON and set as environment variable
+          PORT_VAL=$(echo "$ENV_VARS_JSON" | jq -r '.PORT // empty')
+          NODE_ENV_VAL=$(echo "$ENV_VARS_JSON" | jq -r '.NODE_ENV // empty')
+          API_KEY_VAL=$(echo "$ENV_VARS_JSON" | jq -r '.API_KEY // empty')
+
+          echo "PORT=$PORT_VAL" >> $GITHUB_ENV
+          echo "NODE_ENV=$NODE_ENV_VAL" >> $GITHUB_ENV
+          echo "API_KEY=$API_KEY_VAL" >> $GITHUB_ENV
 
       - name: Install dependencies
         run: npm ci

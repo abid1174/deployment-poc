@@ -17,18 +17,50 @@ jobs:
 
       - name: Decode base64 environment variables
         run: |
-          # Decode the base64 encoded JSON and extract all environment variables
-          ENV_VARS_JSON=$(echo "${{ secrets.DEPLOYMENT_POC_ENV_VARS }}" | base64 -d)
+          # Check if secret exists
+          if [ -z "${{ secrets.DEPLOYMENT_POC_ENV_VARS }}" ]; then
+            echo "ERROR: DEPLOYMENT_POC_ENV_VARS secret is not set or empty"
+            exit 1
+          fi
           
-          # Extract each variable from JSON and set as environment variable
-          echo "PORT=$(echo "$ENV_VARS_JSON" | jq -r '.PORT // empty')" >> $GITHUB_ENV
-          echo "NODE_ENV=$(echo "$ENV_VARS_JSON" | jq -r '.NODE_ENV // empty')" >> $GITHUB_ENV
-          echo "API_KEY=$(echo "$ENV_VARS_JSON" | jq -r '.API_KEY // empty')" >> $GITHUB_ENV
+          echo "Secret exists, length: $(echo -n "${{ secrets.DEPLOYMENT_POC_ENV_VARS }}" | wc -c)"
+          
+          # Decode the base64 encoded JSON
+          set +e
+          ENV_VARS_JSON=$(echo "${{ secrets.DEPLOYMENT_POC_ENV_VARS }}" | base64 -d 2>&1)
+          DECODE_EXIT=$?
+          set -e
+          
+          if [ $DECODE_EXIT -ne 0 ]; then
+            echo "ERROR: Failed to decode base64"
+            echo "$ENV_VARS_JSON"
+            exit 1
+          fi
           
           # Display decoded JSON structure (for debugging)
           echo "=== Decoded JSON Structure ==="
-          echo "$ENV_VARS_JSON" | jq '.'
+          echo "$ENV_VARS_JSON"
           echo "=============================="
+          
+          # Validate JSON
+          if ! echo "$ENV_VARS_JSON" | jq empty 2>/dev/null; then
+            echo "ERROR: Decoded value is not valid JSON"
+            exit 1
+          fi
+          
+          # Extract each variable from JSON and set as environment variable
+          PORT_VAL=$(echo "$ENV_VARS_JSON" | jq -r '.PORT // empty')
+          NODE_ENV_VAL=$(echo "$ENV_VARS_JSON" | jq -r '.NODE_ENV // empty')
+          API_KEY_VAL=$(echo "$ENV_VARS_JSON" | jq -r '.API_KEY // empty')
+          
+          echo "PORT_VAL: $PORT_VAL"
+          echo "NODE_ENV_VAL: $NODE_ENV_VAL"
+          echo "API_KEY_VAL: ${API_KEY_VAL:0:4}... (masked)"
+          
+          # Set environment variables
+          echo "PORT=$PORT_VAL" >> $GITHUB_ENV
+          echo "NODE_ENV=$NODE_ENV_VAL" >> $GITHUB_ENV
+          echo "API_KEY=$API_KEY_VAL" >> $GITHUB_ENV
 
       - name: Display decoded values (masked for security)
         run: |
