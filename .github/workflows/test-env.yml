@@ -15,19 +15,41 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Debug environment information
+        run: |
+          echo "=== Environment Debug Info ==="
+          ENV_NAME="${{ github.ref == 'refs/heads/main' && 'production' || 'development' }}"
+          echo "Environment name: $ENV_NAME"
+          echo "GitHub ref: ${{ github.ref }}"
+          echo "Branch: ${{ github.ref_name }}"
+          echo "=============================="
+
       - name: Decode base64 environment variables
         run: |
           # Check if secret exists
-          if [ -z "${{ secrets.DEPLOYMENT_POC_ENV_VARS }}" ]; then
+          SECRET_VALUE="${{ secrets.DEPLOYMENT_POC_ENV_VARS }}"
+          
+          if [ -z "$SECRET_VALUE" ]; then
             echo "ERROR: DEPLOYMENT_POC_ENV_VARS secret is not set or empty"
+            echo ""
+            ENV_NAME="${{ github.ref == 'refs/heads/main' && 'production' || 'development' }}"
+            echo "Troubleshooting steps:"
+            echo "1. Go to: Repository Settings → Environments"
+            echo "2. Select the environment: $ENV_NAME"
+            echo "3. Add a secret named exactly: DEPLOYMENT_POC_ENV_VARS"
+            echo "4. Value should be base64-encoded JSON like:"
+            echo "   {\"PORT\":\"3000\",\"NODE_ENV\":\"development\",\"API_KEY\":\"your-key\"}"
+            echo ""
+            echo "To encode your JSON:"
+            echo "  echo -n '{\"PORT\":\"3000\",\"NODE_ENV\":\"development\",\"API_KEY\":\"your-key\"}' | base64"
             exit 1
           fi
           
-          echo "Secret exists, length: $(echo -n "${{ secrets.DEPLOYMENT_POC_ENV_VARS }}" | wc -c)"
+          echo "✅ Secret found! Length: $(echo -n "$SECRET_VALUE" | wc -c) characters"
           
           # Decode the base64 encoded JSON
           set +e
-          ENV_VARS_JSON=$(echo "${{ secrets.DEPLOYMENT_POC_ENV_VARS }}" | base64 -d 2>&1)
+          ENV_VARS_JSON=$(echo "$SECRET_VALUE" | base64 -d 2>&1)
           DECODE_EXIT=$?
           set -e
           
